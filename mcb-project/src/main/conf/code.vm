@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MCB Second Factor Email Code</title>
+  </head>
+
+  <body>
+
+    <h2>Sample 2FA Code Form</h2>
+    
+    <form id="login" action="$actionUrl" method="post">
+        <input type="hidden" name="performauthentication" value="true" />
+        
+    #if ($upgradeAuth == "true")
+        <p>You must authenticate at a higher level.</p>
+    #end
+    #if ($forceReAuth == "true")
+        <p>You must re-authenticate per relying party request.</p>
+    #end
+    #if ($loginFailed != "")
+        <p>$loginFailed</p>
+    #end
+    
+    <table>
+        <tr>
+            <td>Code from E-mail:</td>
+            <td><input name="code" type="password" value=""></td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td><input type="submit" value="Submit" /></td>
+        </tr>
+    </table>
+    
+    </form>
+
+    
+  </body>
+</html>

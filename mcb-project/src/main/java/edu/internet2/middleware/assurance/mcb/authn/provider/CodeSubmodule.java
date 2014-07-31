@@ -24,6 +24,10 @@ import edu.internet2.middleware.shibboleth.idp.authn.AuthenticationException;
 import edu.internet2.middleware.shibboleth.idp.authn.LoginHandler;
 import edu.internet2.middleware.shibboleth.idp.util.HttpServletHelper;
 import edu.internet2.middleware.shibboleth.common.attribute.BaseAttribute;
+import java.util.*;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
 import javax.security.auth.login.LoginException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -50,6 +54,8 @@ public class CodeSubmodule implements MCBSubmodule{
 	private String loginPage;
         private int    ValidityWindow; 
         private String emailAttributeId;
+        private String emailServer;
+        private String replyToEmail;
         private String EmailSessionVariable =  "EmailAddress";
         private String TokenName            =  "RandomToken";
         private String CookieName           =  "__idp_second_factor_cached"; 
@@ -60,10 +66,12 @@ public class CodeSubmodule implements MCBSubmodule{
 	 * @param loginPage velocity template containing code input page
 	 * @param validDays the number of days for which this browser is validated as a second factor
 	 */
-	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute) {
+	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute, String server, String reply) {
 		this.loginPage = loginPage;
                 this.ValidityWindow = validDays.intValue();
                 this.emailAttributeId = emailAttribute;
+                this.emailServer      = server;
+                this.replyToEmail     = reply;
 		log.debug("Config: login page: {}", loginPage);
 	}
 
@@ -89,29 +97,34 @@ public class CodeSubmodule implements MCBSubmodule{
                 // Setting up the velocity context
 		VelocityContext vCtx = new VelocityContext();
 
+                // Get the user's e-mail address...
+                String EmailAddress = ResolveAttribute (servlet, request, response, principal.getName(), emailAttributeId);
 
                 // Generate a random token
-                int Token = (int)10000 + (int)(Math.random() * 90000);  // Generates a random 5 digit number between 10,000 and 99,999.
+                int Token = (int)100000 + (int)(Math.random() * 900000);  // Generates a random 6 digit number between 100,000 and 999,999.
 
-                // Adding token to the session.
+                // Adding token and email address to the session.
                 request.getSession().setAttribute(TokenName, Token);
+                request.getSession().setAttribute(EmailSessionVariable, EmailAddress);
 
                 // Check for a cookie to determine if 2nd factor is required.
                 String cookieEmail = GetCookie (request, CookieName);
-                if ( cookieEmail != null ) {
-                   log.debug("The user's browser has a 2nd factor cookie setting 2nd factor fulfilled.");
+                if ( cookieEmail != null && cookieEmail.equals(EmailAddress) ) {
+                   log.debug("The user's browser has a 2nd factor cookie setting for the user that just authenticated.");
                    vCtx.put(cached, "true");
                 }
                 else { // Second factor is required
                    vCtx.put(cached, "false");
-
-                   // Get the user's e-mail address...
-                   String EmailAddress = ResolveAttribute (servlet, request, response, principal.getName(), emailAttributeId);
                     
-                   request.getSession().setAttribute(EmailSessionVariable, EmailAddress);
-
                    // Send Token via e-mail...
                    log.debug("Emailing random token ({}) to email: {}", Token, EmailAddress);
+                   try {
+                     this.SendEmail (EmailAddress, Token);
+                   } catch (MessagingException mex) {
+                        log.debug ("Error attempting to e-mail one time token to {}", EmailAddress);
+                        mex.printStackTrace();
+                        throw new AuthenticationException ("Error trying to email a one-time code.", mex);
+                   }
                 }
 
                 log.debug("Displaying Velocity Token template [{}]",loginPage);
@@ -132,8 +145,10 @@ public class CodeSubmodule implements MCBSubmodule{
 	public boolean processLogin(MCBLoginServlet servlet, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, LoginException {
 		MCBUsernamePrincipal principal = (MCBUsernamePrincipal) request.getSession().getAttribute(LoginHandler.PRINCIPAL_KEY);
 
+                String EmailAddress = (String) request.getSession().getAttribute(EmailSessionVariable);
+
                 // Check to see if we have a valid 2nd factor cookie...
-                if ( GetCookie(request,CookieName) != null) {
+                if ( EmailAddress.equals(GetCookie(request,CookieName)) ) {
                     return true;
                 }
 
@@ -154,7 +169,6 @@ public class CodeSubmodule implements MCBSubmodule{
                 if ( RememberMe )
                 {
 		  log.debug("User Token Valid.  Generating Cookie...");
-                  String EmailAddress = (String) request.getSession().getAttribute(EmailSessionVariable);
                   Cookie cookie = new Cookie(CookieName,EmailAddress);
 		  cookie.setMaxAge(60*60*24*ValidityWindow); //Seconds in a Day x Days Valid
 		  response.addCookie(cookie);
@@ -217,6 +231,44 @@ public class CodeSubmodule implements MCBSubmodule{
         log.error("Could not resolve EmailAddress for principal [{}]", principal);
         return null;
      }
+
+     public void SendEmail (String EmailAddress, int Token) throws MessagingException {
+
+
+        log.debug ("Trying to send email to ({}) with server ({}) from ({})", EmailAddress, emailServer, replyToEmail);
+
+        Properties properties = System.getProperties();
+
+        Integer token = new Integer(Token);
+
+        // Setup mail server
+        properties.setProperty("mail.smtp.host", emailServer);
+
+        // Get the default Session object.
+        Session session = Session.getDefaultInstance(properties);
+
+        // Create a default MimeMessage object.
+        MimeMessage message = new MimeMessage(session);
+
+        // Set From: header field of the header.
+        message.setFrom(new InternetAddress(replyToEmail));
+
+        // Set To: header field of the header.
+        message.addRecipient(Message.RecipientType.TO,
+                                    new InternetAddress(EmailAddress));
+
+        // Set Subject: header field
+        message.setSubject("One-Time Login Token");
+
+        // Now set the actual message
+        message.setText("Please input this token: " + token.toString() );
+
+        // Send message
+        Transport.send(message);
+
+        log.debug ("Successfully e-mailed one time token to {}", EmailAddress);
+   }
+
 }
 
 

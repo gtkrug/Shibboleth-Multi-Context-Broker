@@ -29,6 +29,8 @@
         <constructor-arg index="0" value="code.vm" />
         <constructor-arg index="1" value="60" /> <!-- Days that the entered code remains valid -->
         <constructor-arg index="2" value="EmailAddress" /> <!-- Attribute that contains the user's Email Address -->
+        <constructor-arg index="3" value="localhost" /> <!-- Hostname of mail server -->
+        <constructor-arg index="4" value="nobody@nohost.com" /> <!-- Email Address that codes are shown as From -->
     </bean>
                 
 

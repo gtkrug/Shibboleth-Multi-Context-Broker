@@ -99,12 +99,8 @@ public class CodeSubmodule implements MCBSubmodule{
 
                 // Get the user's e-mail address...
                 String EmailAddress = ResolveAttribute (servlet, request, response, principal.getName(), emailAttributeId);
-
-                // Generate a random token
-                int Token = (int)100000 + (int)(Math.random() * 900000);  // Generates a random 6 digit number between 100,000 and 999,999.
-
-                // Adding token and email address to the session.
-                request.getSession().setAttribute(TokenName, Token);
+    
+                // Add the Email Address to the session so the authenticator does not have to resolve it again.
                 request.getSession().setAttribute(EmailSessionVariable, EmailAddress);
 
                 // Check for a cookie to determine if 2nd factor is required.
@@ -115,15 +111,25 @@ public class CodeSubmodule implements MCBSubmodule{
                 }
                 else { // Second factor is required
                    vCtx.put(cached, "false");
+
+                   // Generate the token or set an error message based on it being typed incorrectly.
+                   if ( request.getSession().getAttribute(TokenName) != null ) {
+                       vCtx.put("wrongCode", "true");
+                   } else {
+                     // Generate a random token
+                     int Token = (int)100000 + (int)(Math.random() * 900000);  // Generates a random 6 digit number between 100,000 and 999,999.
+                     // Adding token and email address to the session.
+                     request.getSession().setAttribute(TokenName, Token);
                     
-                   // Send Token via e-mail...
-                   log.debug("Emailing random token ({}) to email: {}", Token, EmailAddress);
-                   try {
-                     this.SendEmail (EmailAddress, Token);
-                   } catch (MessagingException mex) {
-                        log.debug ("Error attempting to e-mail one time token to {}", EmailAddress);
-                        mex.printStackTrace();
-                        throw new AuthenticationException ("Error trying to email a one-time code.", mex);
+                     // Send Token via e-mail...
+                     log.debug("Emailing random token ({}) to email: {}", Token, EmailAddress);
+                     try {
+                       this.SendEmail (EmailAddress, Token);
+                     } catch (MessagingException mex) {
+                          log.debug ("Error attempting to e-mail one time token to {}", EmailAddress);
+                          mex.printStackTrace();
+                          throw new AuthenticationException ("Error trying to email a one-time code.", mex);
+                     }
                    }
                 }
 
@@ -152,16 +158,24 @@ public class CodeSubmodule implements MCBSubmodule{
                     return true;
                 }
 
-		Integer TokenInput = new Integer(DatatypeHelper.safeTrimOrNullString(request.getParameter("code")));
+                String code = DatatypeHelper.safeTrimOrNullString(request.getParameter("code"));
+                Integer TokenInput;
+
+                if ( code != null ) 
+		   TokenInput = new Integer(code);
+                else
+                   TokenInput = new Integer(0);
+        
+                // The following will always be set based on the page content 
                 Integer TokenValue = (Integer) request.getSession().getAttribute(TokenName);
 		Boolean RememberMe = new Boolean(DatatypeHelper.safeTrimOrNullString(request.getParameter("RememberMe")));
 
 		log.debug("Comparing input token {} to generated token {}", TokenInput, TokenValue);
 
 		if( TokenInput.intValue() != TokenValue){
-			log.error("User inputed invalid token. Removing token from session.");
+			log.error("User inputted invalid token. Removing token from session.");
 			principal.setFailedLogin("Invalid token input.");
-                        request.getSession().removeAttribute(TokenName);
+                        //request.getSession().removeAttribute(TokenName);
 			return false;
 		}
 

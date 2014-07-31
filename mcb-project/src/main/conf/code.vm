@@ -14,27 +14,30 @@
          <input type="submit" value="Submit" />
          </form>
         </div>
-        Verifying Second Factor...
+        Second Factor Already Verified for this Browser.  Continuing...
       </body>
     #else
     <body>
 
     <h2>Sample 2FA Code Form</h2>
-      Your account is configured to request a 2nd factor.  Please input a code below.
+      Your account is configured to request a 2nd factor.  Please input a code below. 
     <form id="login" action="$actionUrl" method="post">
         <input type="hidden" name="performauthentication" value="true" />
-
+        
     #if ($upgradeAuth == "true")
         <p>You must authenticate at a higher level.</p>
     #end
     #if ($forceReAuth == "true")
         <p>You must re-authenticate per relying party request.</p>
     #end
-
+    #if ($wrongCode == "true")
+        <p>You did not enter the code correctly.  Please try again.  To force a new code to be emailed to you, please exit your browser and try logging in again.</p> 
+    #end
+    
     <table>
         <tr>
             <td>Code from E-mail:</td>
-            <td><input name="code" type="password" value=""></td>
+            <td><input name="code" type="text" value=""></td>
         </tr>
         <tr>
             <td>Is this a private computer that you wish to remember for 30 days?</td>
@@ -47,12 +50,10 @@
             <td><input type="submit" value="Submit" /></td>
         </tr>
     </table>
-
+    
     </form>
 
-
+    
   </body>
     #end
-
-
 </html>

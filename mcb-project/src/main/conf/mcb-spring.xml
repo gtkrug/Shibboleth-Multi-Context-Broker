@@ -24,6 +24,14 @@
         <constructor-arg index="0" value="/Authn/MCB/RemoteUser" />
     </bean>
 
+    <!-- This bean represents an authentication submodule for entering a one-time code -->
+    <bean id="mcb.code" class="edu.internet2.middleware.assurance.mcb.authn.provider.CodeSubmodule">
+        <constructor-arg index="0" value="code.vm" />
+        <constructor-arg index="1" value="60" /> <!-- Days that the entered code remains valid -->
+        <constructor-arg index="2" value="EmailAddress" /> <!-- Attribute that contains the user's Email Address -->
+    </bean>
+                
+
     <!-- This bean represents an authentication submodule -->
     <bean id="mcb.token" class="edu.internet2.middleware.assurance.mcb.authn.provider.TokenLoginSubmodule">
     </bean>

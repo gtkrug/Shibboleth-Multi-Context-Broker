@@ -5,36 +5,54 @@
     <title>MCB Second Factor Email Code</title>
   </head>
 
-  <body>
+    #if ($cached2nd == "true")
+      <body onload="document.forms[0].submit()">
+        <!-- Hidden Form -->
+        <div id="hiddenform" style="visibility: hidden">
+         <form id="login" action="$actionUrl" method="post">
+         <input type="hidden" name="performauthentication" value="true" />
+         <input type="submit" value="Submit" />
+         </form>
+        </div>
+        Verifying Second Factor...
+      </body>
+    #else
+    <body>
 
     <h2>Sample 2FA Code Form</h2>
-    
+      Your account is configured to request a 2nd factor.  Please input a code below.
     <form id="login" action="$actionUrl" method="post">
         <input type="hidden" name="performauthentication" value="true" />
-        
+
     #if ($upgradeAuth == "true")
         <p>You must authenticate at a higher level.</p>
     #end
     #if ($forceReAuth == "true")
         <p>You must re-authenticate per relying party request.</p>
     #end
-    #if ($loginFailed != "")
-        <p>$loginFailed</p>
-    #end
-    
+
     <table>
         <tr>
             <td>Code from E-mail:</td>
             <td><input name="code" type="password" value=""></td>
         </tr>
         <tr>
+            <td>Is this a private computer that you wish to remember for 30 days?</td>
+            <td><input type="radio" name="RememberMe" type="password" value="true">Yes</input>
+                <input type="radio" name="RememberMe" type="password" value="false" checked>No</input>
+                </td>
+        </tr>
+        <tr>
             <td>&nbsp;</td>
             <td><input type="submit" value="Submit" /></td>
         </tr>
     </table>
-    
+
     </form>
 
-    
+
   </body>
+    #end
+
+
 </html>

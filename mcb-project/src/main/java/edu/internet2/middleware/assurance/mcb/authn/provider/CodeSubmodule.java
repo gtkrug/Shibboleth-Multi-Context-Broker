@@ -22,10 +22,15 @@ import edu.internet2.middleware.assurance.mcb.authn.provider.MCBSubmodule;
 import edu.internet2.middleware.assurance.mcb.authn.provider.MCBUsernamePrincipal;
 import edu.internet2.middleware.shibboleth.idp.authn.AuthenticationException;
 import edu.internet2.middleware.shibboleth.idp.authn.LoginHandler;
+import edu.internet2.middleware.shibboleth.idp.util.HttpServletHelper;
+import edu.internet2.middleware.shibboleth.common.attribute.BaseAttribute;
 import javax.security.auth.login.LoginException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Cookie;
 import java.lang.Math;
+import java.io.IOException;
+import java.util.ArrayList;
 import org.apache.velocity.VelocityContext;
 import org.opensaml.xml.util.DatatypeHelper;
 import org.slf4j.Logger;
@@ -43,15 +48,22 @@ public class CodeSubmodule implements MCBSubmodule{
 	private String beanName = null;
 
 	private String loginPage;
-        private String TokenName = "RandomToken";
+        private int    ValidityWindow; 
+        private String emailAttributeId;
+        private String EmailSessionVariable =  "EmailAddress";
+        private String TokenName            =  "RandomToken";
+        private String CookieName           =  "__idp_second_factor_cached"; 
+        private String cached               =  "cached2nd";
 
 	/**
 	 * Constructor
 	 * @param loginPage velocity template containing code input page
+	 * @param validDays the number of days for which this browser is validated as a second factor
 	 */
-	public CodeSubmodule(String loginPage){
+	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute) {
 		this.loginPage = loginPage;
-
+                this.ValidityWindow = validDays.intValue();
+                this.emailAttributeId = emailAttribute;
 		log.debug("Config: login page: {}", loginPage);
 	}
 
@@ -74,23 +86,38 @@ public class CodeSubmodule implements MCBSubmodule{
 			return false;
 		}
 
-                //insert a check for code cookie...  TBD...	
+                // Setting up the velocity context
+		VelocityContext vCtx = new VelocityContext();
+
 
                 // Generate a random token
                 int Token = (int)10000 + (int)(Math.random() * 90000);  // Generates a random 5 digit number between 10,000 and 99,999.
 
-		log.debug("Generating a random token ({}) for principal: {}", Token, principal);
-
                 // Adding token to the session.
                 request.getSession().setAttribute(TokenName, Token);
 
+                // Check for a cookie to determine if 2nd factor is required.
+                String cookieEmail = GetCookie (request, CookieName);
+                if ( cookieEmail != null ) {
+                   log.debug("The user's browser has a 2nd factor cookie setting 2nd factor fulfilled.");
+                   vCtx.put(cached, "true");
+                }
+                else { // Second factor is required
+                   vCtx.put(cached, "false");
 
-		VelocityContext vCtx = new VelocityContext();
+                   // Get the user's e-mail address...
+                   String EmailAddress = ResolveAttribute (servlet, request, response, principal.getName(), emailAttributeId);
+                    
+                   request.getSession().setAttribute(EmailSessionVariable, EmailAddress);
 
-		log.debug("Displaying Velocity Token template [{}]",loginPage);
-		servlet.doVelocity(request, response, loginPage, vCtx);
+                   // Send Token via e-mail...
+                   log.debug("Emailing random token ({}) to email: {}", Token, EmailAddress);
+                }
 
-		return true;
+                log.debug("Displaying Velocity Token template [{}]",loginPage);
+                servlet.doVelocity(request, response, loginPage, vCtx);
+
+	        return true;
 	}
 
 	/**
@@ -105,8 +132,14 @@ public class CodeSubmodule implements MCBSubmodule{
 	public boolean processLogin(MCBLoginServlet servlet, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, LoginException {
 		MCBUsernamePrincipal principal = (MCBUsernamePrincipal) request.getSession().getAttribute(LoginHandler.PRINCIPAL_KEY);
 
+                // Check to see if we have a valid 2nd factor cookie...
+                if ( GetCookie(request,CookieName) != null) {
+                    return true;
+                }
+
 		Integer TokenInput = new Integer(DatatypeHelper.safeTrimOrNullString(request.getParameter("code")));
                 Integer TokenValue = (Integer) request.getSession().getAttribute(TokenName);
+		Boolean RememberMe = new Boolean(DatatypeHelper.safeTrimOrNullString(request.getParameter("RememberMe")));
 
 		log.debug("Comparing input token {} to generated token {}", TokenInput, TokenValue);
 
@@ -117,10 +150,16 @@ public class CodeSubmodule implements MCBSubmodule{
 			return false;
 		}
 
-		log.debug("User Token Valid.  Generating Cookie...");
-
-                // Insert Cookie Code...  
-                
+                // User did input the correct 2nd factor, so adding a cookie for them.
+                if ( RememberMe )
+                {
+		  log.debug("User Token Valid.  Generating Cookie...");
+                  String EmailAddress = (String) request.getSession().getAttribute(EmailSessionVariable);
+                  Cookie cookie = new Cookie(CookieName,EmailAddress);
+		  cookie.setMaxAge(60*60*24*ValidityWindow); //Seconds in a Day x Days Valid
+		  response.addCookie(cookie);
+                }
+ 
 		return true;
 	}
 
@@ -136,6 +175,48 @@ public class CodeSubmodule implements MCBSubmodule{
 		beanName = string;
 	}
 
+        public String GetCookie (HttpServletRequest request, String cookieName) {
+              Cookie[] requestCookies = request.getCookies();
+
+              for (Cookie c : requestCookies) {
+                 log.debug("Cookie {} = {}", c.getName(), c.getValue() );
+                 if ( cookieName.equals(c.getName()) ) {
+                    // Found a code cookie
+                    return c.getValue();
+                 }
+             }
+
+             return null;
+        }
+
+        public String ResolveAttribute (MCBLoginServlet servlet, HttpServletRequest request, HttpServletResponse response, String principal, String Attribute) {
+
+           try {
+             MCBAttributeResolver ar = new MCBAttributeResolver();
+             log.debug("Running attribute resolution for principal [{}]", principal);
+
+             String entityID = "urn:all"; // Dummy entityID...  If it matters for this type of resolution will replace later.
+
+             ar.resolve(servlet, request, response, principal, entityID);
+
+             BaseAttribute ba = ar.getAttributes().get(Attribute);
+             log.debug("Found e-mail attribute: {}", ba);
+
+             ArrayList<String> emailAddresses = ar.getValueList(ba);
+
+            if ( emailAddresses.size() >= 1 )
+            {
+              // Return the first email address found.
+              log.debug("Returning email address: {}", emailAddresses.get(0));
+              return emailAddresses.get(0);
+            }
+        } catch ( AuthenticationException e ) {
+           log.error("Authentication exception while trying to resolve EmailAddress:", e);
+        }
+
+        log.error("Could not resolve EmailAddress for principal [{}]", principal);
+        return null;
+     }
 }
 
 

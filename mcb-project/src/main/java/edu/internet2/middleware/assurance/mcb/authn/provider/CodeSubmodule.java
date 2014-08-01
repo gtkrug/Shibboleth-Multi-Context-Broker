@@ -36,6 +36,7 @@ import java.lang.Math;
 import java.io.IOException;
 import java.util.ArrayList;
 import org.apache.velocity.VelocityContext;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.opensaml.xml.util.DatatypeHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,7 @@ public class CodeSubmodule implements MCBSubmodule{
         private String emailAttributeId;
         private String emailServer;
         private String replyToEmail;
+        private String salt;
         private String EmailSessionVariable =  "EmailAddress";
         private String TokenName            =  "RandomToken";
         private String CookieName           =  "__idp_second_factor_cached"; 
@@ -66,12 +68,13 @@ public class CodeSubmodule implements MCBSubmodule{
 	 * @param loginPage velocity template containing code input page
 	 * @param validDays the number of days for which this browser is validated as a second factor
 	 */
-	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute, String server, String reply) {
+	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute, String server, String reply, String salt) {
 		this.loginPage = loginPage;
                 this.ValidityWindow = validDays.intValue();
                 this.emailAttributeId = emailAttribute;
                 this.emailServer      = server;
                 this.replyToEmail     = reply;
+                this.salt             = salt;
 		log.debug("Config: login page: {}", loginPage);
 	}
 
@@ -99,18 +102,20 @@ public class CodeSubmodule implements MCBSubmodule{
 
                 // Get the user's e-mail address...
                 String EmailAddress = ResolveAttribute (servlet, request, response, principal.getName(), emailAttributeId);
+                String EncodedEmail = DigestUtils.sha256Hex(EmailAddress+salt);
     
                 // Add the Email Address to the session so the authenticator does not have to resolve it again.
                 request.getSession().setAttribute(EmailSessionVariable, EmailAddress);
 
                 // Check for a cookie to determine if 2nd factor is required.
                 String cookieEmail = GetCookie (request, CookieName);
-                if ( cookieEmail != null && cookieEmail.equals(EmailAddress) ) {
+                if ( cookieEmail != null && cookieEmail.equals(EncodedEmail) ) {
                    log.debug("The user's browser has a 2nd factor cookie setting for the user that just authenticated.");
                    vCtx.put(cached, "true");
                 }
                 else { // Second factor is required
                    vCtx.put(cached, "false");
+                   vCtx.put("EmailAddress", EmailAddress);
 
                    // Generate the token or set an error message based on it being typed incorrectly.
                    if ( request.getSession().getAttribute(TokenName) != null ) {
@@ -152,9 +157,10 @@ public class CodeSubmodule implements MCBSubmodule{
 		MCBUsernamePrincipal principal = (MCBUsernamePrincipal) request.getSession().getAttribute(LoginHandler.PRINCIPAL_KEY);
 
                 String EmailAddress = (String) request.getSession().getAttribute(EmailSessionVariable);
+                String EncodedEmail = DigestUtils.sha256Hex(EmailAddress+salt);
 
                 // Check to see if we have a valid 2nd factor cookie...
-                if ( EmailAddress.equals(GetCookie(request,CookieName)) ) {
+                if ( EncodedEmail.equals(GetCookie(request,CookieName)) ) {
                     return true;
                 }
 
@@ -183,7 +189,7 @@ public class CodeSubmodule implements MCBSubmodule{
                 if ( RememberMe )
                 {
 		  log.debug("User Token Valid.  Generating Cookie...");
-                  Cookie cookie = new Cookie(CookieName,EmailAddress);
+                  Cookie cookie = new Cookie(CookieName,EncodedEmail);
 		  cookie.setMaxAge(60*60*24*ValidityWindow); //Seconds in a Day x Days Valid
 		  response.addCookie(cookie);
                 }

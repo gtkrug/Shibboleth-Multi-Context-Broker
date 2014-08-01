@@ -31,6 +31,7 @@
         <constructor-arg index="2" value="EmailAddress" /> <!-- Attribute that contains the user's Email Address -->
         <constructor-arg index="3" value="localhost" /> <!-- Hostname of mail server -->
         <constructor-arg index="4" value="nobody@nohost.com" /> <!-- Email Address that codes are shown as From -->
+        <constructor-arg index="5" value="asdkfj" /> <!-- A random string to insure cookies set by this login module cannot be hacked.-->
     </bean>
                 
 

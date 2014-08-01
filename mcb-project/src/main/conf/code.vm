@@ -36,7 +36,7 @@
     
     <table>
         <tr>
-            <td>Code from E-mail:</td>
+            <td>Please input the 6-digit code emailed to $EmailAddress:</td>
             <td><input name="code" type="text" value=""></td>
         </tr>
         <tr>

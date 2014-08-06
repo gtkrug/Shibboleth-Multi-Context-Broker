@@ -34,7 +34,7 @@
         relying party. Must be specified according to schema definition. Set to a value of -1
         to allow an unlimited number of login failures.
      -->
-    <maxFailures>3</maxFailures>
+    <maxFailures>5</maxFailures>
     
     <!-- 
         authContexts is the list of configured contexts the MCB will honor.
@@ -71,6 +71,8 @@
                 <context name="http://id.incommon.org/assurance/silver-token" />
             </allowedContexts>
         </context>
+
+        <context name="urn:oasis:names:tc:SAML:2.0:ac:classes:EmailTwoFactor" method="emailcode" />
 
         <context name="http://id.incommon.org/assurance/silver-token" method="token">
             <!-- 
@@ -111,6 +113,9 @@
         <method name="tokenpluspin" bean="mcb.tokenpluspin">
             Gold Level - Token/PIN Required
         </method>
-        
+        <method name="emailcode" bean="mcb.emailcode">
+            Emailed One-Time Code Required
+        </method>
+
     </authMethods>
 </MultiContextBroker>

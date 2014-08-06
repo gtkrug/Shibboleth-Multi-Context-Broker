@@ -46,9 +46,9 @@ import org.slf4j.LoggerFactory;
  * 
  * @author Not Applicable
  */
-public class CodeSubmodule implements MCBSubmodule{
+public class EmailCodeSubmodule implements MCBSubmodule{
 
-	private final Logger log = LoggerFactory.getLogger(CodeSubmodule.class);
+	private final Logger log = LoggerFactory.getLogger(EmailCodeSubmodule.class);
 
 	private String beanName = null;
 
@@ -68,7 +68,7 @@ public class CodeSubmodule implements MCBSubmodule{
 	 * @param loginPage velocity template containing code input page
 	 * @param validDays the number of days for which this browser is validated as a second factor
 	 */
-	public CodeSubmodule(String loginPage, Integer validDays, String emailAttribute, String server, String reply, String salt) {
+	public EmailCodeSubmodule(String loginPage, Integer validDays, String emailAttribute, String server, String reply, String salt) {
 		this.loginPage = loginPage;
                 this.ValidityWindow = validDays.intValue();
                 this.emailAttributeId = emailAttribute;
@@ -93,7 +93,7 @@ public class CodeSubmodule implements MCBSubmodule{
 		MCBUsernamePrincipal principal = (MCBUsernamePrincipal) request.getSession().getAttribute(LoginHandler.PRINCIPAL_KEY);
 		log.debug("principal name is: {}", principal.getName());
 		if(principal == null || principal.getName() == null || principal.getName().equals("") || principal.getName().equals("[principal]")){
-			log.error("The CodeSubmodule may not be invoked unless the user already has authenticated using another method.  No user principal detected.");
+			log.error("The EmailCodeSubmodule may not be invoked unless the user already has authenticated using another method.  No user principal detected.");
 			return false;
 		}
 
